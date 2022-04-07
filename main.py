@@ -2,8 +2,8 @@ from tqdm import tqdm
 from car_environment import SimpleCarEnvironment
 import matplotlib.pyplot as plt
 from tf_agents.environments import tf_py_environment, wrappers
-from tf_agents.networks import actor_distribution_network, value_network
-from tf_agents.agents.reinforce import reinforce_agent
+from tf_agents.networks import value_network
+from tf_agents.policies.policy_saver import PolicySaver
 from tf_agents.agents.ppo import ppo_clip_agent, ppo_agent, ppo_actor_network
 from tf_agents.replay_buffers import reverb_replay_buffer, reverb_utils
 from tf_agents.specs import tensor_spec
@@ -12,9 +12,10 @@ from tf_agents.policies import py_tf_eager_policy
 from tf_agents.utils import common
 import reverb
 import imageio
+import os
 import tensorflow as tf
 
-num_iterations = 50 # @param {type:"integer"}
+num_iterations = 70 # @param {type:"integer"}
 collect_episodes_per_iteration = 3 # @param {type:"integer"}
 replay_buffer_capacity = 5000 # @param {type:"integer"}
 
@@ -24,7 +25,7 @@ learning_rate = 1e-3 # @param {type:"number"}
 log_interval = 25 # @param {type:"integer"}
 num_eval_episodes = 10 # @param {type:"integer"}
 eval_interval = 15 # @param {type:"integer"}
-SimpleCarEnvironment.SIM_FPS = 15
+SimpleCarEnvironment.SIM_FPS = 30
 SIM_DURATION_S = 20
 
 train_py_env = wrappers.TimeLimit(SimpleCarEnvironment(), SimpleCarEnvironment.SIM_FPS * SIM_DURATION_S)
@@ -154,6 +155,10 @@ for _ in tqdm(range(num_iterations)):
     print('step = {0}: Average Return = {1}'.format(step, avg_return))
     returns.append(avg_return)
 
+policy_dir = os.path.join(os.getcwd(), 'policy')
+policy_saver = PolicySaver(tf_agent.policy)
+
+policy_saver.save(policy_dir)
 num_episodes = 5
 video_filename = 'imageio.mp4'
 with imageio.get_writer(video_filename, fps=SimpleCarEnvironment.SIM_FPS) as video:

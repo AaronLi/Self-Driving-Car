@@ -1,3 +1,4 @@
+from itertools import combinations
 from math import hypot
 import time
 import matplotlib.pyplot as plt
@@ -18,7 +19,7 @@ class SimpleCarEnvironment(py_environment.PyEnvironment):
     def __init__(self):
         self.world = []
         self.car = Circle((0, 0), 20)
-        self.car_velocity = [0, 0]
+        self.car_velocity = np.zeros(2)
         self.car_direction = 0
         self._episode_ended = False
         self.steering_amount = 30
@@ -27,14 +28,15 @@ class SimpleCarEnvironment(py_environment.PyEnvironment):
         self.sim_score = 0
         self.travelled = 0
         self.left_wall = -500
-        self.right_wall = 500
+        self.right_wall = 700
         self.top_wall = -500
         self.bottom_wall = 500
         self.last_command = [0.5, 0.5]
         self.terminate_simulation = False
         self._action_spec = array_spec.BoundedArraySpec(shape=(2, ), dtype=np.float32, minimum = 0, maximum=1, name='action') # speed, steering
-        self._observation_spec = array_spec.BoundedArraySpec(shape=(65, ), dtype=np.float32, minimum = 0, maximum=1, name='observation')
+        self._observation_spec = array_spec.BoundedArraySpec(shape=(130,), dtype=np.float32, minimum = 0, maximum=1, name='observation')
         self.create_environment()
+        self.last_observation = self._make_observation(-32, 32)
     
     def action_spec(self):
         return self._action_spec
@@ -62,7 +64,7 @@ class SimpleCarEnvironment(py_environment.PyEnvironment):
             #     self.world.append(RegularPolygon((shape_x, shape_y), random.random() * 100, random.randint(3, 6)))
 
     def _reset(self):
-        self.car_velocity = [0, 0]
+        self.car_velocity = np.zeros(2)
         self.car = Circle((0, 0), 20)
         self.current_sim_steps = 0
         self.car_direction = 0
@@ -71,7 +73,8 @@ class SimpleCarEnvironment(py_environment.PyEnvironment):
         self.sim_score = 0
         self.terminate_simulation = False
         self.create_environment()
-        return ts.restart(np.array(self.car_observation(-32, 32)))
+        self.last_observation = self._make_observation(-32, 32)
+        return ts.restart(self.car_observation(-32, 32))
     
     def _step(self, action):
         if self.terminate_simulation:
@@ -85,8 +88,7 @@ class SimpleCarEnvironment(py_environment.PyEnvironment):
         self.car_velocity[0] += (2*action[0]-1) * self.max_speed * np.cos(self.car_direction / 180 * np.pi) * (1.0/self.SIM_FPS)
         self.car_velocity[1] += (2*action[0]-1) * self.max_speed * np.sin(self.car_direction / 180 * np.pi) * (1.0/self.SIM_FPS)
 
-        self.car.pos[0] += self.car_velocity[0] * (1.0/self.SIM_FPS)
-        self.car.pos[1] += self.car_velocity[1] * (1.0/self.SIM_FPS)
+        self.car.pos += self.car_velocity * (1.0/self.SIM_FPS)
         
         self.current_sim_steps += 1
 
@@ -106,7 +108,7 @@ class SimpleCarEnvironment(py_environment.PyEnvironment):
         #reward = self.sim_score#hypot(self.car_velocity[0], self.car_velocity[1]) * velocity_forward_ratio
         if self.collisions():
             self.terminate_simulation = True
-            return ts.termination(observation, reward)
+            return ts.termination(observation, -10)
         
         return ts.transition(observation, reward=reward, discount = 1.0)
 
@@ -120,7 +122,7 @@ class SimpleCarEnvironment(py_environment.PyEnvironment):
         return False
 
 
-    def car_observation(self, from_degrees, to_degrees):
+    def _make_observation(self, from_degrees, to_degrees):
         observations = np.ndarray(shape=(to_degrees- from_degrees + 1, ), dtype=np.float32)
         for angle_offset in range(from_degrees, to_degrees+1):
             ray_start = self.car.pos
@@ -139,6 +141,12 @@ class SimpleCarEnvironment(py_environment.PyEnvironment):
             
         return observations
 
+    def car_observation(self, from_degrees, to_degrees):
+        current_observation = self._make_observation(from_degrees, to_degrees)
+        new_observation = np.hstack((current_observation, self.last_observation))
+        self.last_observation = current_observation
+        return new_observation
+
     def draw(self) -> Surface:
         surface = Surface((self.right_wall - self.left_wall, self.bottom_wall - self.top_wall + 100))
         offset = (-self.left_wall, -self.top_wall)
@@ -154,21 +162,27 @@ class SimpleCarEnvironment(py_environment.PyEnvironment):
         start = time.time()
         intersect = self.car_observation(-32, 32)
         print('Elapsed: ',time.time()-start)
-        for angle, distance in enumerate(intersect):
+        for angle in range(len(intersect)//2):
+            distance = intersect[angle]
             angle_adjusted = angle - 32
             distance *= 300
             ray_start = self.car.pos
             ray_direction_y = np.sin((self.car_direction + angle_adjusted) / 180 * np.pi)
             ray_direction_x = np.cos((self.car_direction + angle_adjusted) / 180 * np.pi)
             draw.line(surface, (0, 255, 255), (ray_start[0] + offset[0], ray_start[1] + offset[1]), (ray_start[0] + ray_direction_x * distance+offset[0], ray_start[1] + ray_direction_y * distance+offset[1]))
-        depth_visualization = interpolate.interp1d(np.arange(-32, 33, dtype=int), intersect, kind='cubic')
+        depth_visualization = interpolate.interp1d(np.arange(-32, 33, dtype=int), intersect[:65], kind='cubic')
+        old_depth_visualization = interpolate.interp1d(np.arange(-32, 33, dtype=int), intersect[65:], kind='cubic')
 
         for i in range(surface.get_width()):
             # draw a vertical line from the interpolation
             interpretation_point = (i-surface.get_width()//2) * 64 / surface.get_width()
-            colour = 255 - min(int(depth_visualization(interpretation_point) * 255), 255)
+            vis = depth_visualization(interpretation_point)
+            vis_old = old_depth_visualization(interpretation_point)
+            colour = 255 - min(int(vis * 255), 255)
+            colour_new = 255 - min(int(vis_old * 255), 255)
             try:
-                draw.line(surface, (colour, colour, colour), (i, surface.get_height()-100), (i, surface.get_height()-20))
+                draw.line(surface, (colour, colour, colour), (i, surface.get_height()-100), (i, surface.get_height()-60))
+                draw.line(surface, (colour_new, colour_new, colour_new), (i, surface.get_height()-60), (i, surface.get_height()-20))
             except ValueError:
                 print(colour)
         draw.rect(surface, (0, 0, 0), (0, surface.get_height()-20, surface.get_width(), 20))
