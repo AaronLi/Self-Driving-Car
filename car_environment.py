@@ -29,8 +29,8 @@ class SimpleCarEnvironment(py_environment.PyEnvironment):
         self.travelled = 0
         self.left_wall = -1000
         self.right_wall = 1000
-        self.top_wall = -1000
-        self.bottom_wall = 1000
+        self.top_wall = -500
+        self.bottom_wall = 500
         self.last_command = np.full(2, 0.5, dtype=np.float32)
         self.terminate_simulation = False
         self._action_spec = array_spec.BoundedArraySpec(shape=(2, ), dtype=np.float32, minimum = 0, maximum=1, name='action') # speed, steering
@@ -51,13 +51,13 @@ class SimpleCarEnvironment(py_environment.PyEnvironment):
         left_wall = Line((self.left_wall, self.top_wall), (self.left_wall, self.bottom_wall))
         self.world = [top_wall, right_wall, bottom_wall, left_wall]
 
-        for i in range(20):
+        for i in range(10):
             obstacle = 0#random.randint(0, 2)
 
             radius = random.random() * 80 + 20
-            radius_keepaway = np.ceil(radius) + 10
-            shape_x = random.randint(self.left_wall, -radius_keepaway) if random.randint(0, 1) else random.randint(radius_keepaway, self.right_wall)
-            shape_y = random.randint(self.top_wall, -radius_keepaway) if random.randint(0, 1) else random.randint(radius_keepaway, self.bottom_wall)
+            radius_keepaway = 100
+            shape_x = random.randint(self.left_wall + radius_keepaway, -radius_keepaway) if random.randint(0, 1) else random.randint(radius_keepaway, self.right_wall - radius_keepaway)
+            shape_y = random.randint(self.top_wall + radius_keepaway, -radius_keepaway) if random.randint(0, 1) else random.randint(radius_keepaway, self.bottom_wall - radius_keepaway)
             if obstacle == 0:
                 self.world.append(Circle((shape_x, shape_y), radius))
             # else:
@@ -111,7 +111,7 @@ class SimpleCarEnvironment(py_environment.PyEnvironment):
         #reward = self.sim_score#hypot(self.car_velocity[0], self.car_velocity[1]) * velocity_forward_ratio
         if self.collisions():
             self.terminate_simulation = True
-            return ts.termination(observation, -10)
+            return ts.termination(observation, -5)
         
         return ts.transition(observation, reward=reward, discount = 1.0)
 

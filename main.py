@@ -19,14 +19,14 @@ num_iterations = 30 # @param {type:"integer"}
 collect_episodes_per_iteration = 3 # @param {type:"integer"}
 replay_buffer_capacity = 5000 # @param {type:"integer"}
 
-fc_layer_params = (128, 64, 64, 32)
+fc_layer_params = (256, 128, 64, 64, 32)
 
 learning_rate = 1e-3 # @param {type:"number"}
 log_interval = 25 # @param {type:"integer"}
 num_eval_episodes = 10 # @param {type:"integer"}
 eval_interval = 15 # @param {type:"integer"}
-SimpleCarEnvironment.SIM_FPS = 15
-SIM_DURATION_S = 15
+SimpleCarEnvironment.SIM_FPS = 10
+SIM_DURATION_S = 30
 
 if __name__ == '__main__':
   train_py_env = wrappers.TimeLimit(SimpleCarEnvironment(), SimpleCarEnvironment.SIM_FPS * SIM_DURATION_S)

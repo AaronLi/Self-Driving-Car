@@ -5,14 +5,12 @@ from tf_agents.policies import policy_loader
 import tensorflow as tf
 import imageio
 from pygame import *
-from main import SIM_DURATION_S
+SimpleCarEnvironment.SIM_FPS = 30
 
-SimpleCarEnvironment.SIM_FPS = 15
-
-eval_py_env = wrappers.TimeLimit(SimpleCarEnvironment(), SimpleCarEnvironment.SIM_FPS * SIM_DURATION_S)
+eval_py_env = SimpleCarEnvironment()
 eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
 
-policy = tf.saved_model.load(os.path.join(os.getcwd(), 'policy'))
+policy = tf.saved_model.load(os.path.join(os.getcwd(), 'policy_archive', 'overnight_final'))
 
 def make_video():
     num_episodes = 5
@@ -54,7 +52,6 @@ def evaluate_forever():
         if time_step.is_last():
             time_step = eval_env.reset()
         clockity.tick(SimpleCarEnvironment.SIM_FPS)
-        print('.')
 
 if __name__ == '__main__':
      evaluate_forever()
