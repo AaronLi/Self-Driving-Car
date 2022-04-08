@@ -12,18 +12,6 @@ eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
 
 policy = tf.saved_model.load(os.path.join(os.getcwd(), 'policy_archive', 'overnight_final'))
 
-def make_video():
-    num_episodes = 5
-    video_filename = 'imageio.mp4'
-    with imageio.get_writer(video_filename, fps=SimpleCarEnvironment.SIM_FPS) as video:
-        for _ in range(num_episodes):
-            time_step = eval_env.reset()
-            video.append_data(eval_py_env.render())
-            while not time_step.is_last():
-                action_step = policy.action(time_step)
-                time_step = eval_env.step(action_step.action)
-                video.append_data(eval_py_env.render())
-
 def evaluate_forever():
     running = True
 
@@ -54,5 +42,5 @@ def evaluate_forever():
         clockity.tick(SimpleCarEnvironment.SIM_FPS)
 
 if __name__ == '__main__':
-     evaluate_forever()
-    #make_video()
+    evaluate_forever()
+    
