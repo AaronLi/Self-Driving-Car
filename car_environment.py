@@ -27,14 +27,14 @@ class SimpleCarEnvironment(py_environment.PyEnvironment):
         self.current_sim_steps = 0
         self.sim_score = 0
         self.travelled = 0
-        self.left_wall = -500
-        self.right_wall = 700
-        self.top_wall = -500
-        self.bottom_wall = 500
-        self.last_command = [0.5, 0.5]
+        self.left_wall = -1000
+        self.right_wall = 1000
+        self.top_wall = -1000
+        self.bottom_wall = 1000
+        self.last_command = np.full(2, 0.5, dtype=np.float32)
         self.terminate_simulation = False
         self._action_spec = array_spec.BoundedArraySpec(shape=(2, ), dtype=np.float32, minimum = 0, maximum=1, name='action') # speed, steering
-        self._observation_spec = array_spec.BoundedArraySpec(shape=(130,), dtype=np.float32, minimum = 0, maximum=1, name='observation')
+        self._observation_spec = array_spec.BoundedArraySpec(shape=(65+65,), dtype=np.float32, minimum = 0, maximum=1, name='observation') # current observation, last observation
         self.create_environment()
         self.last_observation = self._make_observation(-32, 32)
     
@@ -69,7 +69,7 @@ class SimpleCarEnvironment(py_environment.PyEnvironment):
         self.current_sim_steps = 0
         self.car_direction = 0
         self.travelled = 0
-        self.last_command = [0.5, 0.5]
+        self.last_command = np.full(2, 0.5, dtype=np.float32)
         self.sim_score = 0
         self.terminate_simulation = False
         self.create_environment()
@@ -80,13 +80,15 @@ class SimpleCarEnvironment(py_environment.PyEnvironment):
         if self.terminate_simulation:
             return self._reset()
         self.last_command = action
-        self.car_velocity[0] -= self.car_velocity[0] * 0.9 * (1.0/self.SIM_FPS)
-        self.car_velocity[1] -= self.car_velocity[1] * 0.9 * (1.0/self.SIM_FPS)
 
-        self.car_direction += (2*action[1]-1) * self.steering_amount * (1.0/self.SIM_FPS)
+        commit_action = action
 
-        self.car_velocity[0] += (2*action[0]-1) * self.max_speed * np.cos(self.car_direction / 180 * np.pi) * (1.0/self.SIM_FPS)
-        self.car_velocity[1] += (2*action[0]-1) * self.max_speed * np.sin(self.car_direction / 180 * np.pi) * (1.0/self.SIM_FPS)
+        self.car_velocity -= self.car_velocity * 0.9 * (1.0/self.SIM_FPS)
+
+        self.car_direction += (2*commit_action[1]-1) * self.steering_amount * (1.0/self.SIM_FPS)
+
+        self.car_velocity[0] += (2*commit_action[0]-1) * self.max_speed * np.cos(self.car_direction / 180 * np.pi) * (1.0/self.SIM_FPS)
+        self.car_velocity[1] += (2*commit_action[0]-1) * self.max_speed * np.sin(self.car_direction / 180 * np.pi) * (1.0/self.SIM_FPS)
 
         self.car.pos += self.car_velocity * (1.0/self.SIM_FPS)
         
@@ -102,8 +104,9 @@ class SimpleCarEnvironment(py_environment.PyEnvironment):
         # self.travelled += hypot(self.car_velocity[0], self.car_velocity[1])
 
         #self.sim_score += min((self.travelled / (float(self.current_sim_steps)/self.SIM_FPS)) / self.max_speed, 1) # distance over time
-
+        
         reward = hypot(self.car_velocity[0], self.car_velocity[1]) * velocity_forward_ratio
+    
 
         #reward = self.sim_score#hypot(self.car_velocity[0], self.car_velocity[1]) * velocity_forward_ratio
         if self.collisions():
@@ -111,8 +114,6 @@ class SimpleCarEnvironment(py_environment.PyEnvironment):
             return ts.termination(observation, -10)
         
         return ts.transition(observation, reward=reward, discount = 1.0)
-
-        
 
         
     def collisions(self):
@@ -171,7 +172,7 @@ class SimpleCarEnvironment(py_environment.PyEnvironment):
             ray_direction_x = np.cos((self.car_direction + angle_adjusted) / 180 * np.pi)
             draw.line(surface, (0, 255, 255), (ray_start[0] + offset[0], ray_start[1] + offset[1]), (ray_start[0] + ray_direction_x * distance+offset[0], ray_start[1] + ray_direction_y * distance+offset[1]))
         depth_visualization = interpolate.interp1d(np.arange(-32, 33, dtype=int), intersect[:65], kind='cubic')
-        old_depth_visualization = interpolate.interp1d(np.arange(-32, 33, dtype=int), intersect[65:], kind='cubic')
+        old_depth_visualization = interpolate.interp1d(np.arange(-32, 33, dtype=int), intersect[65:130], kind='cubic')
 
         for i in range(surface.get_width()):
             # draw a vertical line from the interpolation
@@ -186,12 +187,14 @@ class SimpleCarEnvironment(py_environment.PyEnvironment):
             except ValueError:
                 print(colour)
         draw.rect(surface, (0, 0, 0), (0, surface.get_height()-20, surface.get_width(), 20))
+        # automated driving
         throttle_rect = Rect(surface.get_width()//2, surface.get_height()-20, surface.get_width() * (self.last_command[0]-0.5), 10)
         steering_rect = Rect(surface.get_width()//2, surface.get_height()-10, surface.get_width() * (self.last_command[1]-0.5), 10)
         throttle_rect.normalize()
         steering_rect.normalize()
         draw.rect(surface, (0, 255, 0), throttle_rect)
         draw.rect(surface, (0, 255, 0), steering_rect)
+        
         return surface
 
     def render(self, mode=None):
